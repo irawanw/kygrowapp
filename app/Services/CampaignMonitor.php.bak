@@ -1,0 +1,87 @@
+<?php 
+namespace App\Services;
+use GuzzleHttp\Client;
+use App\MailToken;
+
+class CampaignMonitor implements MailingInterface
+{
+	private $client_id;
+	private $client_secret;
+	private $redirect_uri;
+	private $_base_route;
+	private $protocol;
+	private $host;
+	private $code;
+    private $user_id;
+    private $mail_token;
+	
+	function __construct($code,$user_id)
+	{
+        //can be place to .env
+        $this->client_id = '112305';
+        $this->client_secret = '5w0j0DH0090gO30WhW0UH8Z000s0e0e0B0dO9BybtyC00iP0h00ObiuM0Rj0000ACiPLAxfKcTt2G87R';
+        $this->redirect_uri = 'http://iwikodevsite-in.cloud.revoluz.io:49405/integrate';
+        
+        $this->protocol = 'https' ;
+        $this->host = 'api.createsend.com';
+        //base url api
+        $this->_base_route = $this->protocol.'://'.$this->host;
+
+		$this->code = $code;
+        $this->user_id = $user_id;
+        $this->mail_token = new MailToken;
+	}
+
+	public function connection()
+	{
+        //create GuzzleHttp client
+		$client = new \GuzzleHttp\Client(['http_errors' => true]);
+        
+        $url_token = $this->_base_route.'/oauth/token';
+        $res_token = $client->request('POST', $url_token , [ 
+            //make Content-Type application/x-www-form-urlencoded
+            'form_params' => [
+                //fields
+                'grant_type' => 'authorization_code',
+                'client_id' => $this->client_id,
+                'client_secret' => $this->client_secret,
+                'code' => $this->code,
+                'redirect_uri' => $this->redirect_uri
+            ]
+        ]);
+
+        $body = json_decode($res_token->getBody()->getContents(), true);
+        $access_token = array_get($body, 'access_token');
+        $refresh_token = array_get($body, 'refresh_token');
+        $auth = array(
+            'access_token' => $access_token,
+            'refresh_token' => $refresh_token);
+        
+        //data access_token and refresh_token on body can be save to DB
+        $this->mail_token->access = $access_token;
+        $this->mail_token->refresh = $refresh_token;
+        $this->mail_token->mailing_id = 9;
+        $this->mail_token->user_id = $this->user_id;
+
+        //$this->mail_token->save();
+
+        //after this, get the subscribers
+        $url_list = $this->_base_route.'/api/v3.1/clients/'.$this->client_id.'/lists';
+        $res_list = $client->request('GET', $url_list ,[ 
+			'headers' => [
+	            'Authorization' => 'Bearer '.$access_token,
+	            'Content-Type' => 'application/json',
+	            'deserialise' => true,
+                'host' => $this->host,
+                'protocol' => $this->protocol
+            ],
+		]);
+        return json_decode($res_list->getBody().$url_list);
+    }
+    
+    public function get_list()
+	{
+
+    }
+
+} ?>
